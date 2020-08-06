@@ -29,9 +29,17 @@ const (
 	identityPath = "/identity/v1"
 )
 
+// RegisterClient provides the ability to register either a single entity or a
+// "batch" of entities.
 type RegisterClient interface {
+
+	// Deprecated: method to be removed at the end of this completing this feature
 	RegisterEntitiesRemoveMe(agentEntityID entity.ID, entities []RegisterEntity) ([]RegisterEntityResponse, time.Duration, error)
-	RegisterProtocolEntities(agentEntityID entity.ID, entities []protocol.Entity) (RegisterBatchEntityResponse, time.Duration, error)
+
+	// RegisterBatchEntities registers a slice of protocol.Entity. This is done as a batch process
+	RegisterBatchEntities(agentEntityID entity.ID, entities []protocol.Entity) ([]RegisterEntityResponse, time.Duration, error)
+
+	// RegisterEntity registers a protocol.Entity
 	RegisterEntity(agentEntityID entity.ID, entity protocol.Entity) (RegisterEntityResponse, error)
 }
 
@@ -58,13 +66,20 @@ type RegisterEntityResponse struct {
 	Name string     `json:"entityName"`
 }
 
-type RegisterBatchEntityResponse []RegisterEntityResponse
+func NewRegisterEntityResponse(id entity.ID, key entity.Key, name string) RegisterEntityResponse {
+	return RegisterEntityResponse{
+		ID:   id,
+		Key:  key,
+		Name: name,
+	}
+}
 
 func NewRegisterEntity(key entity.Key) RegisterEntity {
 	return RegisterEntity{key, "", "", nil, nil}
 }
 
-func NewIdentityRegisterClient(
+// NewRegisterClient returns an implementation of RegisterClient
+func NewRegisterClient(
 	svcUrl, licenseKey, userAgent string,
 	compressionLevel int,
 	httpClient backendhttp.Client,
@@ -88,79 +103,64 @@ func NewIdentityRegisterClient(
 	}, nil
 }
 
-func (rc *registerClient) RegisterProtocolEntities(agentEntityID entity.ID, entities []protocol.Entity) (resp RegisterBatchEntityResponse, duration time.Duration, err error) {
+func (rc *registerClient) RegisterBatchEntities(agentEntityID entity.ID, entities []protocol.Entity) (resp []RegisterEntityResponse, duration time.Duration, err error) {
 
 	ctx := context.Background()
 
 	registerRequests := make([]identity.RegisterRequest, len(entities))
 
 	for i := range entities {
-		registerRequest := identity.RegisterRequest{
-			EntityType:  entities[i].Type,
-			EntityName:  entities[i].Name,
-			DisplayName: entities[i].DisplayName,
-			Metadata:    convertMetadataToMapStringString(entities[i].Metadata),
-		}
-		registerRequests[i] = registerRequest
+		registerRequests[i] = newRegisterRequest(entities[i])
 	}
 
 	localVarOptionals := &identity.RegisterBatchPostOpts{
 		XNRIAgentEntityId: optional.NewInt64(int64(agentEntityID)),
 	}
 
-	apiReps, httpResp, err := rc.apiClient.RegisterBatchPost(ctx, rc.userAgent, rc.licenseKey, registerRequests, localVarOptionals)
+	apiReps, _, err := rc.apiClient.RegisterBatchPost(ctx, rc.userAgent, rc.licenseKey, registerRequests, localVarOptionals)
 	if err != nil {
-		rlog.
-			WithError(err).
-			WithField("XNRIAgentEntityId", agentEntityID).
-			WithField("status", httpResp.StatusCode).
-			WithField("RegisterRequests", registerRequests).
-			Error("Something went wrong")
 		return resp, time.Second, err // TODO add right duration
 	}
 
-	resp = make(RegisterBatchEntityResponse, len(apiReps))
+	resp = make([]RegisterEntityResponse, len(apiReps))
 
 	for i := range apiReps {
-		resp[i] = RegisterEntityResponse{
-			ID:   entity.ID(apiReps[i].EntityId),
-			Key:  entity.Key(apiReps[i].EntityName),
-			Name: apiReps[i].EntityName,
-		}
+		resp[i] = NewRegisterEntityResponse(
+			entity.ID(apiReps[i].EntityId),
+			entity.Key(apiReps[i].EntityName),
+			apiReps[i].EntityName)
 	}
 
 	return resp, time.Second, err
 }
 
+func newRegisterRequest(entity protocol.Entity) identity.RegisterRequest {
+	registerRequest := identity.RegisterRequest{
+		EntityType:  entity.Type,
+		EntityName:  entity.Name,
+		DisplayName: entity.DisplayName,
+		Metadata:    convertMetadataToMapStringString(entity.Metadata),
+	}
+	return registerRequest
+}
+
 func (rc *registerClient) RegisterEntity(agentEntityID entity.ID, ent protocol.Entity) (resp RegisterEntityResponse, err error) {
 
 	ctx := context.Background()
-	registerRequest := identity.RegisterRequest{
-		EntityType:  ent.Type,
-		EntityName:  ent.Name,
-		DisplayName: ent.DisplayName,
-		Metadata:    convertMetadataToMapStringString(ent.Metadata),
-	}
+	registerRequest := newRegisterRequest(ent)
 	localVarOptionals := &identity.RegisterPostOpts{
 		XNRIAgentEntityId: optional.NewInt64(int64(agentEntityID)),
 	}
 
-	apiReps, httpResp, err := rc.apiClient.RegisterPost(ctx, rc.userAgent, rc.licenseKey, registerRequest, localVarOptionals)
+	apiReps, _, err := rc.apiClient.RegisterPost(ctx, rc.userAgent, rc.licenseKey, registerRequest, localVarOptionals)
 	if err != nil {
-		rlog.
-			WithError(err).
-			WithField("XNRIAgentEntityId", agentEntityID).
-			WithField("status", httpResp.StatusCode).
-			WithField("RegisterRequest", registerRequest).
-			Error("Something went wrong")
 		return resp, err
 	}
 
-	resp = RegisterEntityResponse{
-		ID:   entity.ID(apiReps.EntityId),
-		Key:  entity.Key(apiReps.EntityName),
-		Name: apiReps.EntityName,
-	}
+	resp = NewRegisterEntityResponse(
+		entity.ID(apiReps.EntityId),
+		entity.Key(apiReps.EntityName),
+		apiReps.EntityName)
 
 	return resp, err
 }
