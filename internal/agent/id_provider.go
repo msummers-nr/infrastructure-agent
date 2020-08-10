@@ -3,6 +3,8 @@
 package agent
 
 import (
+	"fmt"
+	"github.com/newrelic/infrastructure-agent/pkg/integrations/v4/protocol"
 	"time"
 
 	"github.com/newrelic/infrastructure-agent/pkg/log"
@@ -19,6 +21,38 @@ var clog = log.WithComponent("IDProvider")
 // Waits for next retry if register endpoint status is not healthy.
 type ProvideIDs struct {
 	legacy func(agentIdn entity.Identity, entities []identityapi.RegisterEntity) ([]identityapi.RegisterEntityResponse, error)
+	cache  ProvideIDsFromMemory
+}
+
+type ErrEntityIDsNotFound struct {
+	entities []protocol.Entity
+}
+
+func newErrEntityIDsNotFound(entities []protocol.Entity) ErrEntityIDsNotFound {
+	return ErrEntityIDsNotFound{
+		entities: entities,
+	}
+}
+
+func (e *ErrEntityIDsNotFound) Error() string {
+	return fmt.Sprintf("could not found the following entities: %p", e.entities)
+}
+
+type ProvideIDsFromMemory []identityapi.RegisterEntityResponse
+
+func (p *ProvideIDs) entities(agentIdn entity.Identity, entities []protocol.Entity) (ids []identityapi.RegisterEntityResponse, err error) {
+	return []identityapi.RegisterEntityResponse{
+		{
+			ID:   1234,
+			Key:  "remote_entity_nginx_Key",
+			Name: "remote_entity_nginx",
+		},
+		{
+			ID:   6543,
+			Key:  "remote_entity_flex_Key",
+			Name: "remote_entity_flex",
+		},
+	}, nil
 }
 
 type idProvider struct {
@@ -32,7 +66,7 @@ func NewProvideIDs(
 	sm state.RegisterSM,
 ) ProvideIDs {
 	p := newIDProvider(client, sm)
-	return ProvideIDs { p.legacy}
+	return ProvideIDs{legacy: p.legacy}
 }
 
 func newIDProvider(client identityapi.RegisterClient, sm state.RegisterSM) *idProvider {
@@ -73,4 +107,3 @@ retry:
 	}
 	return
 }
-
