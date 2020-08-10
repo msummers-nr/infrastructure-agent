@@ -79,10 +79,10 @@ func (r *incrementalRegister) RegisterEntity(agentEntityID entity.ID, ent protoc
 	}, nil
 }
 
-func TestNewProvideIDs(t *testing.T) {
+func TestNewProvideIDs_Legacy(t *testing.T) {
 	provideIDs := NewProvideIDs(newIncrementalRegister(), state.NewRegisterSM())
 
-	ids, err := provideIDs(agentIdn, registerEntities)
+	ids, err := provideIDs.legacy(agentIdn, registerEntities)
 	assert.NoError(t, err)
 
 	require.Len(t, ids, 1)
@@ -90,18 +90,18 @@ func TestNewProvideIDs(t *testing.T) {
 	assert.Equal(t, entity.ID(1), ids[0].ID, "incremental register should return 1 as first id")
 }
 
-func TestRetryAfter(t *testing.T) {
+func TestRetryAfter_Legacy(t *testing.T) {
 	p := newIDProvider(newRetryAfterRegister(), state.NewRegisterSM())
 
-	_, err := p.provideIDs(agentIdn, registerEntities)
+	_, err := p.legacy(agentIdn, registerEntities)
 	assert.Error(t, err)
 	assert.Equal(t, state.RegisterRetryAfter, p.state.State())
 }
 
-func TestRetryBackoff(t *testing.T) {
+func TestRetryBackoff_Legacy(t *testing.T) {
 	p := newIDProvider(newRetryBackoffRegister(), state.NewRegisterSM())
 
-	_, err := p.provideIDs(agentIdn, registerEntities)
+	_, err := p.legacy(agentIdn, registerEntities)
 	assert.Error(t, err)
 	assert.Equal(t, state.RegisterRetryBackoff, p.state.State())
 }

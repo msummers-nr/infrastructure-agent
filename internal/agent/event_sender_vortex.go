@@ -283,7 +283,7 @@ func (s *vortexEventSender) flushRegister(events []eventVortexData) {
 	}
 
 	// launches http request
-	idsRes, err := s.provideIDs(s.agentIDProvide(), entities)
+	idsRes, err := s.provideIDs.legacy(s.agentIDProvide(), entities)
 	if err != nil {
 		logRegisterErr(entities, err)
 	}
