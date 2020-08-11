@@ -3,7 +3,6 @@
 package agent
 
 import (
-	"fmt"
 	"github.com/newrelic/infrastructure-agent/pkg/integrations/v4/protocol"
 	"time"
 
@@ -20,65 +19,119 @@ var clog = log.WithComponent("IDProvider")
 // ProvideIDs provides remote entity IDs.
 // Waits for next retry if register endpoint status is not healthy.
 type ProvideIDs struct {
+	cache *ProvideIDsNameToResponse
 	legacy func(agentIdn entity.Identity, entities []identityapi.RegisterEntity) ([]identityapi.RegisterEntityResponse, error)
-	cache  ProvideIDsFromMemory
+	Entities func(agentIdn entity.Identity, entities []protocol.Entity) (registerEntity []identityapi.RegisterEntityResponse, failedEntities ErrorStateEntities)
+	ListenForNewEntities func()
 }
 
 type ErrEntityIDsNotFound struct {
 	entities []protocol.Entity
 }
 
-func newErrEntityIDsNotFound(entities []protocol.Entity) *ErrEntityIDsNotFound {
-	return &ErrEntityIDsNotFound{
-		entities: entities,
+type errorState string
+
+const entityNotFoundInCache = "entity not found in cache"
+
+type ErrStateEntity struct {
+	State errorState
+	Err error
+	Entity protocol.Entity
+}
+
+type ErrorStateEntities []ErrStateEntity
+
+func newErrorStateEntity(entity protocol.Entity, state errorState, err error) ErrStateEntity{
+	return ErrStateEntity{
+		State: state,
+		Err: err,
+		Entity: entity,
 	}
 }
 
-
-func (e *ErrEntityIDsNotFound) Message() string {
-	return fmt.Sprintf("could not found the following entities: %p", e.entities)
-}
-
-func (e *ErrEntityIDsNotFound) Error() error {
-	return fmt.Errorf("")
-}
-
-type ProvideIDsFromMemory map[string]identityapi.RegisterEntityResponse
-
-func (p *ProvideIDs) entities(agentIdn entity.Identity, entities []protocol.Entity) (ids []identityapi.RegisterEntityResponse, err error) {
-	if len(p.cache) <= 0 {
-		return nil, newErrEntityIDsNotFound(entities).Error()
-	}
-
-	foundedEntities := make([]identityapi.RegisterEntityResponse, 0)
-
-	for _, entity := range p.cache {
-		if _, ok := p.cache[entity.Name]; ok {
-			foundedEntities = append(foundedEntities, entity)
-		}
-	}
-
-	return foundedEntities, nil
-}
+type ProvideIDsNameToResponse map[string]identityapi.RegisterEntityResponse
 
 type idProvider struct {
 	client identityapi.RegisterClient
 	state  state.RegisterSM
+	cache  ProvideIDsNameToResponse
+	registerEntityChan chan RegisterBatchEntities
+}
+
+type RegisterBatchEntities struct {
+	entityID entity.ID
+	entities []protocol.Entity
+}
+
+func (p *idProvider) entities(agentIdn entity.Identity, entities []protocol.Entity) (registeredEntity []identityapi.RegisterEntityResponse, errorStateEntities ErrorStateEntities) {
+
+	if len(p.cache) <= 0 {
+		errorStateEntities = make(ErrorStateEntities, len(entities))
+
+		for i := range entities{
+			errorStateEntities[i] = newErrorStateEntity(entities[i], entityNotFoundInCache, nil)
+		}
+
+		p.registerEntityChan <- RegisterBatchEntities{agentIdn.ID, entities}
+
+		return nil, errorStateEntities
+	}
+
+	errorStateEntities = make(ErrorStateEntities, 0)
+	entitiesToRegister := make([]protocol.Entity, 0)
+	registeredEntity = make([]identityapi.RegisterEntityResponse, 0)
+
+	for _, entity := range entities {
+		if foundEntity, ok := p.cache[entity.Name]; ok {
+			registeredEntity = append(registeredEntity, foundEntity)
+		}else{
+			errorStateEntities = append(errorStateEntities, newErrorStateEntity(entity, entityNotFoundInCache, nil))
+			entitiesToRegister = append(entitiesToRegister, entity)
+		}
+	}
+
+	p.registerEntityChan <- RegisterBatchEntities{agentIdn.ID, entitiesToRegister}
+
+	return registeredEntity, errorStateEntities
+}
+
+func (p *idProvider) listenForNewEntitiesToRegister(){
+
+	select {
+	case registerBatchEntities := <-p.registerEntityChan:
+		response, _, _ := p.client.RegisterBatchEntities(
+			registerBatchEntities.entityID,
+			registerBatchEntities.entities)
+
+		for i := range response {
+			p.cache[response[i].Name] = response[i]
+		}
+	}
 }
 
 // NewProvideIDs creates a new remote entity IDs provider.
 func NewProvideIDs(
 	client identityapi.RegisterClient,
 	sm state.RegisterSM,
+	registerEntityChan chan RegisterBatchEntities,
 ) ProvideIDs {
-	p := newIDProvider(client, sm)
-	return ProvideIDs{legacy: p.legacy}
+	p := newIDProvider(client, sm, registerEntityChan)
+	return ProvideIDs{
+		cache: &p.cache,
+		legacy: p.legacy,
+		Entities: p.entities,
+		ListenForNewEntities: p.listenForNewEntitiesToRegister,
+	}
 }
 
-func newIDProvider(client identityapi.RegisterClient, sm state.RegisterSM) *idProvider {
+func newIDProvider(client identityapi.RegisterClient, sm state.RegisterSM, registerEntityChan chan RegisterBatchEntities) *idProvider {
+	cache := make(ProvideIDsNameToResponse)
+
 	return &idProvider{
 		client: client,
 		state:  sm,
+		cache: cache,
+		registerEntityChan: registerEntityChan,
 	}
 }
 

@@ -352,7 +352,7 @@ func NewAgent(
 		return nil, err
 	}
 
-	provideIDs := NewProvideIDs(registerClient, state.NewRegisterSM())
+	provideIDs := NewProvideIDs(registerClient, state.NewRegisterSM(), nil)
 	fpHarvester, err := fingerprint.NewHarvestor(cfg, hostnameResolver, cloudHarvester)
 
 	if err != nil {

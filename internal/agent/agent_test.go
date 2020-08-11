@@ -66,7 +66,7 @@ func newTesting(cfg *config.Config) *Agent {
 	}
 
 	connectSrv := NewIdentityConnectService(&MockIdentityConnectClient{}, fpHarvester)
-	provideIDs := NewProvideIDs(&EmptyRegisterClient{}, state.NewRegisterSM())
+	provideIDs := NewProvideIDs(&EmptyRegisterClient{}, state.NewRegisterSM(), nil)
 
 	a, err := New(
 		cfg,
