@@ -124,11 +124,24 @@ func TestRetryBackoff_Legacy(t *testing.T) {
 func TestNewProvideIDs_MemoryFirst(t *testing.T) {
 	agentIdn = entity.Identity{ID: 13}
 	testCases := []struct {
+		setup         map[string]identityapi.RegisterEntityResponse
 		agentIdentity entity.Identity
 		entities      []protocol.Entity
 		want          []identityapi.RegisterEntityResponse
 	}{
 		{
+			setup: map[string]identityapi.RegisterEntityResponse{
+				"remote_entity_flex": {
+					ID:   6543,
+					Key:  "remote_entity_flex_Key",
+					Name: "remote_entity_flex",
+				},
+				"remote_entity_nginx": {
+					ID:   1234,
+					Key:  "remote_entity_nginx_Key",
+					Name: "remote_entity_nginx",
+				},
+			},
 			agentIdentity: agentIdn,
 			entities: []protocol.Entity{
 				{Name: "remote_entity_flex"},
@@ -153,19 +166,9 @@ func TestNewProvideIDs_MemoryFirst(t *testing.T) {
 
 	for _, test := range testCases {
 		provideIDs := NewProvideIDs(client, state.NewRegisterSM())
-		provideIDs.cache = []identityapi.RegisterEntityResponse{
-			{
-				ID:   1234,
-				Key:  "remote_entity_nginx_Key",
-				Name: "remote_entity_nginx",
-			},
-			{
-				ID:   6543,
-				Key:  "remote_entity_flex_Key",
-				Name: "remote_entity_flex",
-			},
-		}
-		registeredEntities, _ := provideIDs.entities(test.agentIdentity, test.entities)
+		provideIDs.cache = test.setup
+		registeredEntities, err := provideIDs.entities(test.agentIdentity, test.entities)
+		require.NoError(t, err)
 		assert.ElementsMatch(t, test.want, registeredEntities)
 		client.AssertNotCalled(t, "RegisterEntity")
 		client.AssertNotCalled(t, "RegisterBatchEntities")
@@ -177,11 +180,12 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 
 	expectedError := func(entities []protocol.Entity) string {
 		errEntityIDsNotFound := newErrEntityIDsNotFound(entities)
-		return errEntityIDsNotFound.Error()
+		return errEntityIDsNotFound.Message()
 	}
 
 	testCases := []struct {
 		name          string
+		setup         map[string]identityapi.RegisterEntityResponse
 		agentIdentity entity.Identity
 		entities      []protocol.Entity
 		want          []identityapi.RegisterEntityResponse
@@ -198,7 +202,14 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 			}),
 		},
 		{
-			name:          "One found and other not found in memory",
+			name: "One found and other not found in memory",
+			setup: map[string]identityapi.RegisterEntityResponse{
+				"remote_entity_redis": {
+					ID:   6666,
+					Key:  "remote_entity_redis_Key",
+					Name: "remote_entity_redis",
+				},
+			},
 			agentIdentity: agentIdn,
 			entities: []protocol.Entity{
 				{Name: "remote_entity_redis"},
@@ -221,6 +232,7 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 
 	for _, test := range testCases {
 		provideIDs := NewProvideIDs(client, state.NewRegisterSM())
+		provideIDs.cache = test.setup
 		registeredEntities, err := provideIDs.entities(test.agentIdentity, test.entities)
 		require.EqualError(t, err, test.error)
 		assert.ElementsMatch(t, test.want, registeredEntities)

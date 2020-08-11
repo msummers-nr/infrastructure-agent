@@ -28,31 +28,37 @@ type ErrEntityIDsNotFound struct {
 	entities []protocol.Entity
 }
 
-func newErrEntityIDsNotFound(entities []protocol.Entity) ErrEntityIDsNotFound {
-	return ErrEntityIDsNotFound{
+func newErrEntityIDsNotFound(entities []protocol.Entity) *ErrEntityIDsNotFound {
+	return &ErrEntityIDsNotFound{
 		entities: entities,
 	}
 }
 
-func (e *ErrEntityIDsNotFound) Error() string {
+
+func (e *ErrEntityIDsNotFound) Message() string {
 	return fmt.Sprintf("could not found the following entities: %p", e.entities)
 }
 
-type ProvideIDsFromMemory []identityapi.RegisterEntityResponse
+func (e *ErrEntityIDsNotFound) Error() error {
+	return fmt.Errorf("")
+}
+
+type ProvideIDsFromMemory map[string]identityapi.RegisterEntityResponse
 
 func (p *ProvideIDs) entities(agentIdn entity.Identity, entities []protocol.Entity) (ids []identityapi.RegisterEntityResponse, err error) {
-	return []identityapi.RegisterEntityResponse{
-		{
-			ID:   1234,
-			Key:  "remote_entity_nginx_Key",
-			Name: "remote_entity_nginx",
-		},
-		{
-			ID:   6543,
-			Key:  "remote_entity_flex_Key",
-			Name: "remote_entity_flex",
-		},
-	}, nil
+	if len(p.cache) <= 0 {
+		return nil, newErrEntityIDsNotFound(entities).Error()
+	}
+
+	foundedEntities := make([]identityapi.RegisterEntityResponse, 0)
+
+	for _, entity := range p.cache {
+		if _, ok := p.cache[entity.Name]; ok {
+			foundedEntities = append(foundedEntities, entity)
+		}
+	}
+
+	return foundedEntities, nil
 }
 
 type idProvider struct {
