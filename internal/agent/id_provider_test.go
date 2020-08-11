@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"fmt"
 	"github.com/newrelic/infrastructure-agent/pkg/integrations/v4/protocol"
 	"github.com/stretchr/testify/mock"
 	"math/rand"
@@ -124,13 +125,13 @@ func TestRetryBackoff_Legacy(t *testing.T) {
 func TestNewProvideIDs_MemoryFirst(t *testing.T) {
 	agentIdn = entity.Identity{ID: 13}
 	testCases := []struct {
-		setup         *ProvideIDsNameToResponse
+		cache         *EntityIDClientResponse
 		agentIdentity entity.Identity
 		entities      []protocol.Entity
 		want          []identityapi.RegisterEntityResponse
 	}{
 		{
-			setup: &ProvideIDsNameToResponse{
+			cache: &EntityIDClientResponse{
 				"remote_entity_flex": {
 					ID:   6543,
 					Key:  "remote_entity_flex_Key",
@@ -162,20 +163,18 @@ func TestNewProvideIDs_MemoryFirst(t *testing.T) {
 		},
 	}
 
-	client := &mockRegisterClient{}
-
 	for _, test := range testCases {
-		registerEntityChan := make(chan RegisterBatchEntities, 2)
-		provideIDs := NewProvideIDs(client, state.NewRegisterSM(), registerEntityChan)
-		*provideIDs.cache = *test.setup
-		registeredEntities, failedEntities := provideIDs.Entities(test.agentIdentity, test.entities)
+		registerEntityChan := make(chan RegisterEntities, 2)
+		provideIDs := NewProvideIDs(&mockRegisterClient{}, state.NewRegisterSM(), registerEntityChan)
+		*provideIDs.cache = *test.cache
+		registeredEntities, unregisteredEntities := provideIDs.Entities(test.agentIdentity, test.entities)
 
-		assert.Empty(t, failedEntities)
+		assert.Empty(t, unregisteredEntities)
 		assert.ElementsMatch(t, test.want, registeredEntities)
 
 		select {
-		case <- registerEntityChan:
-			assert.Fail(t, "channel should be empty")
+		case r := <-registerEntityChan:
+			assert.Fail(t, fmt.Sprintf("expected to not have entities to register, but found %v", r.entities))
 		default:
 		}
 	}
@@ -185,29 +184,29 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 	agentIdn = entity.Identity{ID: 13}
 
 	testCases := []struct {
-		name           string
-		setup          *ProvideIDsNameToResponse
-		agentIdentity  entity.Identity
-		entities       []protocol.Entity
-		want           []identityapi.RegisterEntityResponse
-		failedEntities ErrorStateEntities
-		sendToRegisterEntities RegisterBatchEntities
+		name          string
+		cache         *EntityIDClientResponse
+		agentIdentity entity.Identity
+		entities      []protocol.Entity
+		want          []identityapi.RegisterEntityResponse
+		notFounded    UnregisteredEntities
+		toRegister    RegisterEntities
 	}{
 		{
 			name:          "Non of the entities were found in memory",
-			setup: &ProvideIDsNameToResponse{},
+			cache:         &EntityIDClientResponse{},
 			agentIdentity: agentIdn,
 			entities: []protocol.Entity{
 				{Name: "remote_entity_flex"},
 			},
-			failedEntities: ErrorStateEntities{
-				newErrorStateEntity(
+			notFounded: UnregisteredEntities{
+				newUnregisteredEntity(
 					protocol.Entity{
 						Name: "remote_entity_flex",
 					}, entityNotFoundInCache, nil),
 			},
-			sendToRegisterEntities: RegisterBatchEntities{
-				entityID: agentIdn.ID,
+			toRegister: RegisterEntities{
+				agentID: agentIdn.ID,
 				entities: []protocol.Entity{
 					{Name: "remote_entity_flex"},
 				},
@@ -215,7 +214,7 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 		},
 		{
 			name: "One found and other not found in memory",
-			setup: &ProvideIDsNameToResponse{
+			cache: &EntityIDClientResponse{
 				"remote_entity_redis": {
 					ID:   6666,
 					Key:  "remote_entity_redis_Key",
@@ -234,14 +233,14 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 					Name: "remote_entity_redis",
 				},
 			},
-			failedEntities: ErrorStateEntities{
-				newErrorStateEntity(
+			notFounded: UnregisteredEntities{
+				newUnregisteredEntity(
 					protocol.Entity{
 						Name: "remote_entity_nginx",
 					}, entityNotFoundInCache, nil),
 			},
-			sendToRegisterEntities: RegisterBatchEntities{
-				entityID: agentIdn.ID,
+			toRegister: RegisterEntities{
+				agentID: agentIdn.ID,
 				entities: []protocol.Entity{
 					{Name: "remote_entity_nginx"},
 				},
@@ -252,20 +251,23 @@ func TestNewProvideIDs_EntityIDNotFound(t *testing.T) {
 	client := &mockRegisterClient{}
 
 	for _, test := range testCases {
-		registerEntityChan := make(chan RegisterBatchEntities, 1)
+		t.Run(test.name, func(t *testing.T) {
+			registerEntityChan := make(chan RegisterEntities, 1)
 
-		provideIDs := NewProvideIDs(client, state.NewRegisterSM(), registerEntityChan)
-		*provideIDs.cache = *test.setup
-		registeredEntities, failedEntities := provideIDs.Entities(test.agentIdentity, test.entities)
+			provideIDs := NewProvideIDs(client, state.NewRegisterSM(), registerEntityChan)
+			*provideIDs.cache = *test.cache
 
-		assert.ElementsMatch(t, test.want, registeredEntities)
-		assert.ElementsMatch(t, test.failedEntities, failedEntities)
+			registeredEntities, unregisteredEntities := provideIDs.Entities(test.agentIdentity, test.entities)
 
-		select {
-		case registerBatchEntities := <- registerEntityChan:
-			assert.Equal(t,test.sendToRegisterEntities, registerBatchEntities)
-		default:
-			assert.Fail(t, "channel should not be empty")
-		}
+			assert.ElementsMatch(t, test.want, registeredEntities)
+			assert.ElementsMatch(t, test.notFounded, unregisteredEntities)
+
+			select {
+			case e := <-registerEntityChan:
+				assert.Equal(t, test.toRegister, e)
+			default:
+				assert.Fail(t, fmt.Sprintf("expected to send entities (%v) to register", test.toRegister.entities))
+			}
+		})
 	}
 }
