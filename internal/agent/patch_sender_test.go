@@ -64,9 +64,9 @@ func TestNewPatchSender(t *testing.T) {
 
 func cachePluginData(t *testing.T, store *delta.Store, entityKey string) {
 	plugin := &delta.PluginInfo{
-		Source:       "metadata/plugin",
-		Plugin:       "metadata",
-		FileName:     "plugin.json",
+		Source:   "metadata/plugin",
+		Plugin:   "metadata",
+		FileName: "plugin.json",
 	}
 	srcFile := store.SourceFilePath(plugin, entityKey)
 	err := os.MkdirAll(filepath.Dir(srcFile), 0755)
