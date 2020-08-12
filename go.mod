@@ -16,10 +16,9 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/fortytw2/leaktest v1.3.1-0.20190606143808-d73c753520d9
-	github.com/fsnotify/fsnotify v0.9.3
-	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/fsnotify/fsnotify v1.4.7
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-ole/go-ole v1.2.1 // indirect
-	github.com/gogo/protobuf v1.1.2-0.20181116123445-07eab6a8298c // indirect
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/gorilla/mux v1.7.4 // indirect
@@ -37,11 +36,11 @@ require (
 	github.com/shirou/gopsutil v2.18.12-0.20181220224138-a5ace91ccec8+incompatible
 	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4 // indirect
 	github.com/sirupsen/logrus v1.6.1-0.20200528085638-6699a89a232f
+	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
 	golang.org/x/text v0.3.3-0.20190829152558-3d0f7978add9 // indirect
-	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c // indirect
 	google.golang.org/grpc v1.29.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
 	gopkg.in/yaml.v2 v2.2.7
