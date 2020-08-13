@@ -51,6 +51,11 @@ const (
 	unixSocketRegex = `^unix_(udp|tcp):///.*`
 )
 
+// Winlog constants
+const (
+	eventIdRangeRegex = `^(\d+-\d+)$`
+)
+
 const (
 	rAttEntityGUID = "entity.guid.INFRA"
 	rAttFbInput    = "fb.input"
@@ -59,10 +64,11 @@ const (
 )
 
 const (
-	fbGrepFieldForTail     = "log"
-	fbGrepFieldForSystemd  = "MESSAGE"
-	fbGrepFieldForSyslog   = "message"
-	fbGrepFieldForTcpPlain = "log"
+	fbGrepFieldForTail          = "log"
+	fbGrepFieldForSystemd       = "MESSAGE"
+	fbGrepFieldForSyslog        = "message"
+	fbGrepFieldForTcpPlain      = "log"
+	fbGrepFieldForWinlogEventId = "EventId"
 )
 
 // LogsCfg stores logging product configuration split by block entries.
@@ -279,7 +285,7 @@ func parseConfigBlock(l LogCfg, logsHomeDir string) (input FBCfgInput, filters [
 	} else if l.Tcp != nil {
 		input, filters, err = parseTcpInput(l)
 	} else if l.Winlog != nil {
-		input, filters = parseWinlogInput(l, dbPath)
+		input, filters, err = parseWinlogInput(l, dbPath)
 	}
 
 	if err != nil {
@@ -355,52 +361,47 @@ func parseTcpInput(l LogCfg) (input FBCfgInput, filters []FBCfgParser, err error
 }
 
 //Winlog: "winlog" plugin
-func parseWinlogInput(l LogCfg, dbPath string) (input FBCfgInput, filters []FBCfgParser) {
+func parseWinlogInput(l LogCfg, dbPath string) (input FBCfgInput, filters []FBCfgParser, err error) {
 	input = newWinlogInput(*l.Winlog, dbPath, l.Name)
 	filters = append(filters, newRecordModifierFilterForInput(l.Name, fbInputTypeWinlog, l.Attributes))
 	if included, excluded := l.Winlog.CollectEventIds, l.Winlog.ExcludeEventIds; len(included) > 0 || len(excluded) > 0 {
-		eventIdGrep := FBCfgParser{
-			Name:  fbFilterTypeGrep,
-			Match: l.Name,
+		var regexInclude string
+		regexInclude, err = numberRangesToRegex(included)
+		if err != nil {
+			return
 		}
-		if len(included) > 0 {
-			eventIdGrep.RegexInclude = fmt.Sprintf("EventId %s", numberRangesToRegex(included))
+		var regexExclude string
+		regexExclude, err = numberRangesToRegex(excluded)
+		if err != nil {
+			return
 		}
-
-		if len(excluded) > 0 {
-			eventIdGrep.RegexExclude = fmt.Sprintf("EventId %s", numberRangesToRegex(excluded))
-		}
-
+		eventIdGrep := newGrepFilter(l.Name, fbGrepFieldForWinlogEventId,regexInclude, regexExclude)
 		filters = append(filters, eventIdGrep)
 	}
-	return input, filters
+	return input, filters, nil
 }
 
-func numberRangesToRegex(numberRanges []string) (regex string) {
+func numberRangesToRegex(numberRanges []string) (regex string, e error) {
 	var regexList []string
 	for _, numberRange := range numberRanges {
-		if strings.Contains(numberRange, "-") {
+		if match, err := regexp.MatchString(eventIdRangeRegex, numberRange); match && err == nil {
 			var splitRange = strings.Split(numberRange, "-")
-			bottomLimit, e := strconv.Atoi(splitRange[0])
-			if e != nil {
-				return
-			}
-			topLimit, e := strconv.Atoi(splitRange[1])
-			if e != nil {
-				return
-			}
+			bottomLimit, _ := strconv.Atoi(splitRange[0])
+			topLimit, _ := strconv.Atoi(splitRange[1])
 			regexList = append(regexList, fmt.Sprintf("^(%s)$",
 				strings.Replace(ranger.Compile(bottomLimit, topLimit), `\\`, `\`, -1)))
-		} else {
+		} else if _, err := strconv.Atoi(numberRange); err == nil {
 			regexList = append(regexList, fmt.Sprintf("^%s$", numberRange))
+		} else {
+			return "", fmt.Errorf("invalid EventId or range format")
 		}
 	}
-	return strings.Join(regexList, "|")
+	return strings.Join(regexList, "|"), nil
 }
 
 func parsePattern(l LogCfg, fluentBitGrepField string, filters []FBCfgParser) []FBCfgParser {
 	if l.Pattern != "" {
-		return append(filters, newGrepFilter(l, fluentBitGrepField))
+		return append(filters, newGrepFilter(l.Name, fluentBitGrepField, l.Pattern, ""))
 	}
 	return filters
 }
@@ -536,12 +537,20 @@ func newRecordModifierFilterForInput(tag string, fbFilterInputType string, userA
 	return ret
 }
 
-func newGrepFilter(l LogCfg, fluentBitGrepField string) FBCfgParser {
-	return FBCfgParser{
-		Name:         fbFilterTypeGrep,
-		RegexInclude: fmt.Sprintf("%s %s", fluentBitGrepField, l.Pattern),
-		Match:        l.Name,
+func newGrepFilter(tag, grepField, regexInclude, regexExclude string) FBCfgParser {
+	grepFilter := FBCfgParser{
+		Name:  fbFilterTypeGrep,
+		Match: tag,
 	}
+	if len(regexInclude) > 0 {
+		grepFilter.RegexInclude = fmt.Sprintf("%s %s", grepField, regexInclude)
+	}
+
+	if len(regexExclude) > 0 {
+		grepFilter.RegexExclude = fmt.Sprintf("%s %s", grepField, regexExclude)
+	}
+
+	return grepFilter
 }
 
 func newNROutput(cfg *config.LogForward) FBCfgOutput {
