@@ -6,15 +6,15 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/newrelic/infrastructure-agent/pkg/config"
+	"github.com/newrelic/infrastructure-agent/pkg/license"
+	"github.com/newrelic/infrastructure-agent/pkg/log"
 	"github.com/pkg/errors"
 	"path/filepath"
 	"regexp"
+	"simonwaldherr.de/go/ranger"
 	"strconv"
 	"strings"
 	"text/template"
-
-	"github.com/newrelic/infrastructure-agent/pkg/license"
-	"github.com/newrelic/infrastructure-agent/pkg/log"
 )
 
 var cfgLogger = log.WithComponent("integrations.Supervisor.Config").WithField("process", "log-forwarder")
@@ -86,6 +86,7 @@ type LogCfg struct {
 	Syslog     *LogSyslogCfg     `yaml:"syslog"`
 	Tcp        *LogTcpCfg        `yaml:"tcp"`
 	Fluentbit  *LogExternalFBCfg `yaml:"fluentbit"`
+	Winlog     *LogWinlogCfg     `yaml:"winlog"`
 }
 
 // LogSyslogCfg logging integration config from customer defined YAML, specific for the Syslog input plugin
@@ -93,6 +94,12 @@ type LogSyslogCfg struct {
 	URI             string `yaml:"uri"`
 	Parser          string `yaml:"parser"`
 	UnixPermissions string `yaml:"unix_permissions"`
+}
+
+type LogWinlogCfg struct {
+	Channel         string   `yaml:"channel"`
+	CollectEventIds []string `yaml:"collect-eventids"`
+	ExcludeEventIds []string `yaml:"exclude-eventids"`
 }
 
 type LogTcpCfg struct {
@@ -170,16 +177,17 @@ type FBCfgInput struct {
 	TcpBufferSize         int    // plugin: tcp (note that the "tcp" plugin uses Buffer_Size (without "k"s!) instead of Buffer_Max_Size (with "k"s!))
 }
 
-// FBCfgParser FluentBit Parser config block, only "grep" plugin supported.
+// FBCfgParser FluentBit Parser config block, only "grep" and "record_modifier" plugin supported.
 //  [FILTER]
 //    Name   grep
 //    Match  nri-service
 //    Regex  MESSAGE info
 type FBCfgParser struct {
-	Name    string
-	Match   string
-	Regex   string            // plugin: grep
-	Records map[string]string // plugin: record_modifier
+	Name         string
+	Match        string
+	RegexInclude string // plugin: grep
+	RegexExclude string
+	Records      map[string]string // plugin: record_modifier
 }
 
 // FBCfgOutput FluentBit Output config block, supporting NR output plugin.
@@ -270,6 +278,8 @@ func parseConfigBlock(l LogCfg, logsHomeDir string) (input FBCfgInput, filters [
 		input, filters, err = parseSyslogInput(l)
 	} else if l.Tcp != nil {
 		input, filters, err = parseTcpInput(l)
+	} else if l.Winlog != nil {
+		input, filters = parseWinlogInput(l, dbPath)
 	}
 
 	if err != nil {
@@ -344,6 +354,50 @@ func parseTcpInput(l LogCfg) (input FBCfgInput, filters []FBCfgParser, err error
 	return input, filters, nil
 }
 
+//Winlog: "winlog" plugin
+func parseWinlogInput(l LogCfg, dbPath string) (input FBCfgInput, filters []FBCfgParser) {
+	input = newWinlogInput(*l.Winlog, dbPath, l.Name)
+	filters = append(filters, newRecordModifierFilterForInput(l.Name, fbInputTypeWinlog, l.Attributes))
+	if included, excluded := l.Winlog.CollectEventIds, l.Winlog.ExcludeEventIds; len(included) > 0 || len(excluded) > 0 {
+		eventIdGrep := FBCfgParser{
+			Name:  fbFilterTypeGrep,
+			Match: l.Name,
+		}
+		if len(included) > 0 {
+			eventIdGrep.RegexInclude = fmt.Sprintf("EventId %s", numberRangesToRegex(included))
+		}
+
+		if len(excluded) > 0 {
+			eventIdGrep.RegexExclude = fmt.Sprintf("EventId %s", numberRangesToRegex(excluded))
+		}
+
+		filters = append(filters, eventIdGrep)
+	}
+	return input, filters
+}
+
+func numberRangesToRegex(numberRanges []string) (regex string) {
+	var regexList []string
+	for _, numberRange := range numberRanges {
+		if strings.Contains(numberRange, "-") {
+			var splitRange = strings.Split(numberRange, "-")
+			bottomLimit, e := strconv.Atoi(splitRange[0])
+			if e != nil {
+				return
+			}
+			topLimit, e := strconv.Atoi(splitRange[1])
+			if e != nil {
+				return
+			}
+			regexList = append(regexList, fmt.Sprintf("^(%s)$",
+				strings.Replace(ranger.Compile(bottomLimit, topLimit), `\\`, `\`, -1)))
+		} else {
+			regexList = append(regexList, fmt.Sprintf("^%s$", numberRange))
+		}
+	}
+	return strings.Join(regexList, "|")
+}
+
 func parsePattern(l LogCfg, fluentBitGrepField string, filters []FBCfgParser) []FBCfgParser {
 	if l.Pattern != "" {
 		return append(filters, newGrepFilter(l, fluentBitGrepField))
@@ -382,6 +436,15 @@ func newWindowsEventlogInput(eventLog string, dbPath string, tag string) FBCfgIn
 	return FBCfgInput{
 		Name:     fbInputTypeWinlog,
 		Channels: eventLog,
+		Tag:      tag,
+		DB:       dbPath,
+	}
+}
+
+func newWinlogInput(winlog LogWinlogCfg, dbPath string, tag string) FBCfgInput {
+	return FBCfgInput{
+		Name:     fbInputTypeWinlog,
+		Channels: winlog.Channel,
 		Tag:      tag,
 		DB:       dbPath,
 	}
@@ -475,9 +538,9 @@ func newRecordModifierFilterForInput(tag string, fbFilterInputType string, userA
 
 func newGrepFilter(l LogCfg, fluentBitGrepField string) FBCfgParser {
 	return FBCfgParser{
-		Name:  fbFilterTypeGrep,
-		Regex: fmt.Sprintf("%s %s", fluentBitGrepField, l.Pattern),
-		Match: l.Name,
+		Name:         fbFilterTypeGrep,
+		RegexInclude: fmt.Sprintf("%s %s", fluentBitGrepField, l.Pattern),
+		Match:        l.Name,
 	}
 }
 

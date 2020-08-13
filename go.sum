@@ -168,3 +168,7 @@ gotest.tools v2.2.1-0.20181123051433-bcbf6e613274+incompatible h1:XGnh7TJZPxGDTM
 gotest.tools v2.2.1-0.20181123051433-bcbf6e613274+incompatible/go.mod h1:DsYFclhRJ6vuDpmuTbkuFWG+y2sxOXAzmJt81HFBacw=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
+simonwaldherr.de/go/golibs v0.10.1 h1:52JPCxhkgG8qoOYOhIzSAnjHC80NVRY4P3kAxbDCNck=
+simonwaldherr.de/go/golibs v0.10.1/go.mod h1:OUYf7XAF21Mg3jVAEcHTX1FvpNHghv/i4gsDxUtQ3Yc=
+simonwaldherr.de/go/ranger v0.1.4 h1:XYeTZYa5sShWbYmzo6aC96orKaSUpwh68CcMY7PDUac=
+simonwaldherr.de/go/ranger v0.1.4/go.mod h1:M12Ibcx9G5mzh/8dXpMhRUmFJJoNXvaiPiJax/d0v8U=

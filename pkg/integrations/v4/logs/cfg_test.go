@@ -105,9 +105,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("tail", "log-file"),
 				{
-					Name:  "grep",
-					Match: "log-file",
-					Regex: "log foo",
+					Name:         "grep",
+					Match:        "log-file",
+					RegexInclude: "log foo",
 				},
 				parserEntityBlock,
 			},
@@ -131,9 +131,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("systemd", "some_system"),
 				{
-					Name:  "grep",
-					Match: "some_system",
-					Regex: "MESSAGE foo",
+					Name:         "grep",
+					Match:        "some_system",
+					RegexInclude: "MESSAGE foo",
 				},
 				parserEntityBlock,
 			},
@@ -161,9 +161,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("tail", "some-folder"),
 				{
-					Name:  "grep",
-					Match: "some-folder",
-					Regex: "log foo",
+					Name:         "grep",
+					Match:        "some-folder",
+					RegexInclude: "log foo",
 				},
 				parserEntityBlock,
 			},
@@ -188,6 +188,57 @@ func TestNewFBConf(t *testing.T) {
 				inputRecordModifier("winlog", "win-eventlog"),
 				parserEntityBlock,
 			},
+			Output: outputBlock,
+		}},
+		{"input win-eventlog + eventId filtering", LogsCfg{
+			{
+				Name: "win-security",
+				Winlog: &LogWinlogCfg{
+					Channel:         "Security",
+					CollectEventIds: []string{"5000", "6000-6100", "7000", "7900-8100"},
+					ExcludeEventIds: []string{"6020-6060", "6070"},
+				},
+			},
+			{
+				Name: "win-application",
+				Winlog: &LogWinlogCfg{
+					Channel:         "Application",
+					CollectEventIds: []string{"3000"},
+					ExcludeEventIds: nil,
+				},
+			},
+		}, FBCfg{
+			Inputs: []FBCfgInput{
+				{
+					Name:     "winlog",
+					Tag:      "win-security",
+					DB:       dbDbPath,
+					Channels: "Security",
+				},
+				{
+					Name:     "winlog",
+					Tag:      "win-application",
+					DB:       dbDbPath,
+					Channels: "Application",
+				},
+			},
+			Parsers: []FBCfgParser{
+				inputRecordModifier("winlog", "win-security"),
+				{
+					Name:         "grep",
+					Match:        "win-security",
+					RegexExclude: `EventId ^(602\d|60[3-5]\d|6060)$|^6070$`,
+					RegexInclude: `EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
+				},
+				inputRecordModifier("winlog", "win-application"),
+				{
+					Name:         "grep",
+					Match:        "win-application",
+					RegexInclude: "EventId ^3000$",
+				},
+				parserEntityBlock,
+			},
+
 			Output: outputBlock,
 		}},
 		{"single file with attributes", LogsCfg{
@@ -527,9 +578,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("systemd", "dummy_system"),
 				{
-					Name:  "grep",
-					Match: "dummy_system",
-					Regex: "MESSAGE foo",
+					Name:         "grep",
+					Match:        "dummy_system",
+					RegexInclude: "MESSAGE foo",
 				},
 				parserEntityBlock,
 			},
@@ -589,9 +640,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("syslog", "syslog-tcp-test"),
 				{
-					Name:  "grep",
-					Match: "syslog-tcp-test",
-					Regex: "message foo",
+					Name:         "grep",
+					Match:        "syslog-tcp-test",
+					RegexInclude: "message foo",
 				},
 				parserEntityBlock,
 			},
@@ -623,9 +674,9 @@ func TestNewFBConf(t *testing.T) {
 			Parsers: []FBCfgParser{
 				inputRecordModifier("tcp", "tcp-test"),
 				{
-					Name:  "grep",
-					Match: "tcp-test",
-					Regex: "log foo",
+					Name:         "grep",
+					Match:        "tcp-test",
+					RegexInclude: "log foo",
 				},
 				parserEntityBlock,
 			},
@@ -786,9 +837,9 @@ func TestFBCfgFormat(t *testing.T) {
 		},
 		Parsers: []FBCfgParser{
 			{
-				Name:  "grep",
-				Match: "some-folder",
-				Regex: "log foo",
+				Name:         "grep",
+				Match:        "some-folder",
+				RegexInclude: "log foo",
 			},
 			{
 				Name:  "record_modifier",
@@ -885,9 +936,9 @@ func TestFBCfgFormatWithHostname(t *testing.T) {
 		},
 		Parsers: []FBCfgParser{
 			{
-				Name:  "grep",
-				Match: "some-file",
-				Regex: "log foo",
+				Name:         "grep",
+				Match:        "some-file",
+				RegexInclude: "log foo",
 			},
 			{
 				Name:  "record_modifier",
