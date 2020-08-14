@@ -764,6 +764,12 @@ func TestFBCfgFormat(t *testing.T) {
     Separator \n
     Buffer_Size 32
 
+[INPUT]
+    Name winlog
+    Tag  win-security
+    DB   fb.db
+    Channels Security
+
 [FILTER]
     Name  grep
     Match some-folder
@@ -781,6 +787,17 @@ func TestFBCfgFormat(t *testing.T) {
     Match *
     Record entity.guid.INFRA testGUID
     Record fb.source nri-agent
+
+[FILTER]
+    Name  record_modifier
+    Match win-security
+    Record fb.input winlog
+
+[FILTER]
+    Name  grep
+    Match win-security
+    Exclude EventId ^(602\d|60[3-5]\d|6060)$|^6070$
+    Regex EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$
 
 [OUTPUT]
     Name                newrelic
@@ -833,6 +850,11 @@ func TestFBCfgFormat(t *testing.T) {
 				TcpFormat:     "none",
 				TcpSeparator:  "\\n",
 				TcpBufferSize: 32,
+			}, {
+				Name:     "winlog",
+				Tag:      "win-security",
+				DB:       "fb.db",
+				Channels: "Security",
 			},
 		},
 		Parsers: []FBCfgParser{
@@ -857,6 +879,19 @@ func TestFBCfgFormat(t *testing.T) {
 					"entity.guid.INFRA": "testGUID",
 					"fb.source":         "nri-agent",
 				},
+			},
+			{
+				Name:  "record_modifier",
+				Match: "win-security",
+				Records: map[string]string{
+					"fb.input": "winlog",
+				},
+			},
+			{
+				Name:         "grep",
+				Match:        "win-security",
+				RegexExclude: `EventId ^(602\d|60[3-5]\d|6060)$|^6070$`,
+				RegexInclude: `EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
 			},
 		},
 		Output: FBCfgOutput{

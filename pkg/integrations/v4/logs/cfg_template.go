@@ -72,6 +72,9 @@ var fbConfigFormat = `{{- range .Inputs }}
     {{- if .Match }}
     Match {{ .Match }}
     {{- end }}
+    {{- if .RegexExclude }}
+    Exclude {{ .RegexExclude }}
+    {{- end }}
     {{- if .RegexInclude }}
     Regex {{ .RegexInclude }}
     {{- end }}
