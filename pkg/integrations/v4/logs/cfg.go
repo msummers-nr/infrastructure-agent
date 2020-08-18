@@ -68,7 +68,7 @@ const (
 	fbGrepFieldForSystemd       = "MESSAGE"
 	fbGrepFieldForSyslog        = "message"
 	fbGrepFieldForTcpPlain      = "log"
-	fbGrepFieldForWinlogEventId = "EventId"
+	fbGrepFieldForWinlogEventId = "EventID"
 )
 
 // LogsCfg stores logging product configuration split by block entries.
@@ -121,7 +121,7 @@ type LogExternalFBCfg struct {
 
 // IsValid validates struct as there's no constructor to enforce it.
 func (l *LogCfg) IsValid() bool {
-	return l.Name != "" && (l.File != "" || l.Folder != "" || l.Systemd != "" || l.EventLog != "" || l.Syslog != nil || l.Tcp != nil || l.Fluentbit != nil)
+	return l.Name != "" && (l.File != "" || l.Folder != "" || l.Systemd != "" || l.EventLog != "" || l.Syslog != nil || l.Tcp != nil || l.Fluentbit != nil || l.Winlog !=nil)
 }
 
 // FBCfg FluentBit automatically generated configuration.

@@ -227,14 +227,14 @@ func TestNewFBConf(t *testing.T) {
 				{
 					Name:         "grep",
 					Match:        "win-security",
-					RegexExclude: `EventId ^(602\d|60[3-5]\d|6060)$|^6070$`,
-					RegexInclude: `EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
+					RegexExclude: `EventID ^(602\d|60[3-5]\d|6060)$|^6070$`,
+					RegexInclude: `EventID ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
 				},
 				inputRecordModifier("winlog", "win-application"),
 				{
 					Name:         "grep",
 					Match:        "win-application",
-					RegexInclude: "EventId ^3000$",
+					RegexInclude: "EventID ^3000$",
 				},
 				parserEntityBlock,
 			},
@@ -796,8 +796,8 @@ func TestFBCfgFormat(t *testing.T) {
 [FILTER]
     Name  grep
     Match win-security
-    Exclude EventId ^(602\d|60[3-5]\d|6060)$|^6070$
-    Regex EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$
+    Exclude EventID ^(602\d|60[3-5]\d|6060)$|^6070$
+    Regex EventID ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$
 
 [OUTPUT]
     Name                newrelic
@@ -890,8 +890,8 @@ func TestFBCfgFormat(t *testing.T) {
 			{
 				Name:         "grep",
 				Match:        "win-security",
-				RegexExclude: `EventId ^(602\d|60[3-5]\d|6060)$|^6070$`,
-				RegexInclude: `EventId ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
+				RegexExclude: `EventID ^(602\d|60[3-5]\d|6060)$|^6070$`,
+				RegexInclude: `EventID ^5000$|^(600\d|60[1-9]\d|6[0-1]99|6[0-1]99|6100)$|^7000$|^(790\d|79[1-9]\d|80\d{2}|8[0-1]99|8100)$`,
 			},
 		},
 		Output: FBCfgOutput{
