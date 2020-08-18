@@ -4,15 +4,16 @@ package dm
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
-	"github.com/newrelic-forks/newrelic-telemetry-sdk-go/telemetry"
 	"github.com/newrelic/infrastructure-agent/internal/agent/id"
 	"github.com/newrelic/infrastructure-agent/pkg/integrations/v4/protocol"
 	"github.com/newrelic/infrastructure-agent/pkg/log"
 	"github.com/newrelic/infrastructure-agent/pkg/trace"
+	"github.com/newrelic/newrelic-telemetry-sdk-go/telemetry"
 )
 
 const noCalculationMadeErrMsg = "no calculation made"
@@ -52,6 +53,33 @@ func newTelemetryHarverster(conf MetricsSenderConfig, transport http.RoundTrippe
 		telemetryHarvesterWithTransport(transport, conf.LicenseKey, idnProvide),
 		telemetryHarvesterWithMetricApiUrl(conf.MetricApiURL),
 		telemetry.ConfigHarvestPeriod(conf.SubmissionPeriod),
+		func(config *telemetry.Config) {
+			config.HeaderProcessor = func(batch telemetry.DataBatch) (reqsH []telemetry.RequestHeader) {
+
+				entsSeen := make(map[string]bool, 100)
+				for i := range batch.GetDataTypes() {
+					if val, ok := batch.GetDataTypes()[i].GetAttributes()["nr.entity.id"]; ok {
+						key := fmt.Sprintf("%v", val)
+						if _, isOk := entsSeen[key]; !isOk {
+							entsSeen[key] = true
+						}
+					}
+				}
+				headerValue := ""
+				for key := range entsSeen {
+					headerValue = headerValue + key + ","
+				}
+				headerValue = headerValue[:len(headerValue)-1]
+				elog.WithField("Infra-Entity-Ids", headerValue).WithField("Infra-Agent-Entity-Id", "109127429835080714").Info("Setting telemetry SDK header")
+				return []telemetry.RequestHeader{{
+					Key:   "Infra-Entity-Ids",
+					Value: headerValue,
+				}, {
+					Key:   "Infra-Agent-Entity-Id",
+					Value: "109127429835080714",
+				}}
+			}
+		},
 	)
 }
 

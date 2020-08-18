@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/newrelic-forks/newrelic-telemetry-sdk-go/telemetry"
+	"github.com/newrelic/newrelic-telemetry-sdk-go/telemetry"
 	"github.com/newrelic/infrastructure-agent/pkg/integrations/v4/protocol"
 )
 
@@ -309,7 +309,7 @@ func Test_sender_SendMetrics_cumulative_RateCalculator(t *testing.T) {
 	}{
 		{
 			name:                 "cumulativeRateMetric",
-			rateCalculatorMethod: "GetCumulativeRate",
+			rateCalculatorMethod: "CountMetric",
 			metricType:           protocol.MetricType("cumulative-rate"),
 		},
 		{
@@ -387,7 +387,7 @@ func Test_sender_SendMetric_rate_cumulative_invalid_metric(t *testing.T) {
 		{
 			"CumulativeRateMetric",
 			protocol.MetricType("cumulative-rate"),
-			"GetCumulativeRate",
+			"CountMetric",
 		},
 	}
 
@@ -562,7 +562,7 @@ type mockDeltaCalculator struct {
 	mock.Mock
 }
 
-func (m *mockDeltaCalculator) GetCumulativeCount(
+func (m *mockDeltaCalculator) CountMetric(
 	name string,
 	attributes map[string]interface{},
 	val float64,

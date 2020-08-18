@@ -12,6 +12,8 @@ github.com/antihax/optional v1.0.0 h1:xK2lYat7ZLaVVcIuj82J8kIro4V6kDe0AUDFboUCwc
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/aws/aws-sdk-go v1.25.14-0.20200515182354-0961961790e6 h1:9jT7StPESkUAqBbkbG2JQS57siROId9yb2QpLzY6e+w=
 github.com/aws/aws-sdk-go v1.25.14-0.20200515182354-0961961790e6/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
+github.com/carlosroman/newrelic-telemetry-sdk-go v0.5.0 h1:uYBGlBsiBNOrk80SMSsKA0JebgUdB/Wbs6lUtPvVF1g=
+github.com/carlosroman/newrelic-telemetry-sdk-go v0.5.0/go.mod h1:N0wiuRIB6WzdeCbka7xvMHo99aEj3YcfMxojmLKYfKY=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
